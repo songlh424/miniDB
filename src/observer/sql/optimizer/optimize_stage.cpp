@@ -31,8 +31,8 @@ using namespace common;
 
 RC OptimizeStage::handle_request(SQLStageEvent *sql_event)
 {
+  // 创建逻辑执行计划，也就是SQL语句的执行顺序，比如select中从from->where->group by->having->select->order by
   unique_ptr<LogicalOperator> logical_operator;
-
   RC rc = create_logical_plan(sql_event, logical_operator);
   if (rc != RC::SUCCESS) {
     if (rc != RC::UNIMPLENMENT) {
@@ -42,19 +42,19 @@ RC OptimizeStage::handle_request(SQLStageEvent *sql_event)
   }
 
   ASSERT(logical_operator, "logical operator is null");
-
+  // 重写逻辑计划，根据规则进行表达式和逻辑计划的改写
   rc = rewrite(logical_operator);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to rewrite plan. rc=%s", strrc(rc));
     return rc;
   }
-
+  // 优化逻辑计划，暂时未实现
   rc = optimize(logical_operator);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to optimize plan. rc=%s", strrc(rc));
     return rc;
   }
-
+  // 生成物理计划
   unique_ptr<PhysicalOperator> physical_operator;
   rc = generate_physical_plan(logical_operator, physical_operator, sql_event->session_event()->session());
   if (rc != RC::SUCCESS) {
@@ -77,6 +77,7 @@ RC OptimizeStage::generate_physical_plan(
     unique_ptr<LogicalOperator> &logical_operator, unique_ptr<PhysicalOperator> &physical_operator, Session *session)
 {
   RC rc = RC::SUCCESS;
+  // 使用行处理或批处理，批处理必须是可向量化操作
   if (session->get_execution_mode() == ExecutionMode::CHUNK_ITERATOR && LogicalOperator::can_generate_vectorized_operator(logical_operator->type())) {
     LOG_INFO("use chunk iterator");
     session->set_used_chunk_mode(true);

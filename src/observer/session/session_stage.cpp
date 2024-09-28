@@ -61,7 +61,7 @@ void SessionStage::handle_request2(SessionEvent *event)
   if (common::is_blank(sql.c_str())) {
     return;
   }
-
+  // 设置会话的线程变量
   Session::set_current_session(event->session());
   event->session()->set_current_request(event);
   SQLStageEvent sql_event(event, sql);

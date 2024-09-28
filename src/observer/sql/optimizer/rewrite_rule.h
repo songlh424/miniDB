@@ -11,7 +11,7 @@ See the Mulan PSL v2 for more details. */
 //
 // Created by Wangyunlai on 2022/12/13.
 //
-
+// 都是纯虚，提供接口
 #pragma once
 
 #include <memory>

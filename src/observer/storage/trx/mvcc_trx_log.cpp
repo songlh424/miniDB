@@ -116,7 +116,7 @@ RC MvccTrxLogHandler::commit(int32_t trx_id, int32_t commit_trx_id)
 
   // 我们在这里粗暴的等待日志写入到磁盘
   // 有必要的话，可以让上层来决定如何等待
-  return log_handler_.wait_lsn(lsn);
+  return log_handler_.wait_lsn(lsn);  // 日志提交时等待日志写入磁盘
 }
 
 RC MvccTrxLogHandler::rollback(int32_t trx_id)

@@ -139,7 +139,8 @@ int init_global_objects(ProcessParam *process_param, Ini &properties)
   GCTX.handler_ = new DefaultHandler();
 
   int ret = 0;
-
+  // 这里对DefaultHandler的初始化，通过配置文件中的参数来初始化
+  // 这里会对default_session进行默认数据库设置
   RC rc = GCTX.handler_->init("miniob", 
                               process_param->trx_kit_name().c_str(),
                               process_param->durability_mode().c_str());
@@ -199,6 +200,7 @@ int init(ProcessParam *process_param)
   get_properties()->to_string(conf_data);
   LOG_INFO("Output configuration \n%s", conf_data.c_str());
 
+  // 初始化DefaultHandler，包括对default_session的中db参数的设置
   rc = init_global_objects(process_param, *get_properties());
   if (rc != 0) {
     LOG_ERROR("failed to init global objects");

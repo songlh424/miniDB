@@ -32,7 +32,7 @@ using namespace common;
 RC ExecuteStage::handle_request(SQLStageEvent *sql_event)
 {
   RC rc = RC::SUCCESS;
-
+  // 获取物理算子
   const unique_ptr<PhysicalOperator> &physical_operator = sql_event->physical_operator();
   if (physical_operator != nullptr) {
     return handle_request_with_physical_operator(sql_event);
@@ -40,6 +40,7 @@ RC ExecuteStage::handle_request(SQLStageEvent *sql_event)
 
   SessionEvent *session_event = sql_event->session_event();
 
+  // 没有物理算子，则执行SQL语句
   Stmt *stmt = sql_event->stmt();
   if (stmt != nullptr) {
     CommandExecutor command_executor;

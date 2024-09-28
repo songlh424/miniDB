@@ -199,7 +199,7 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
 
   const TupleSchema &schema   = sql_result->tuple_schema();
   const int          cell_num = schema.cell_num();
-
+  // 写返回的表头信息
   for (int i = 0; i < cell_num; i++) {
     const TupleCellSpec &spec  = schema.cell_at(i);
     const char          *alias = spec.alias();
@@ -236,12 +236,13 @@ RC PlainCommunicator::write_result_internal(SessionEvent *event, bool &need_disc
     }
   }
 
+  // 写返回的行数据
   rc = RC::SUCCESS;
   if (event->session()->get_execution_mode() == ExecutionMode::CHUNK_ITERATOR
       && event->session()->used_chunk_mode()) {
-    rc = write_chunk_result(sql_result);
+    rc = write_chunk_result(sql_result);    // 批量写
   } else {
-    rc = write_tuple_result(sql_result);
+    rc = write_tuple_result(sql_result);    // 元组写
   }
 
   if (OB_FAIL(rc)) {

@@ -76,6 +76,7 @@ RC DiskLogHandler::await_termination()
 RC DiskLogHandler::replay(LogReplayer &replayer, LSN start_lsn)
 {
   LSN max_lsn = 0;
+  // 日志回放的回调函数，用于处理每个日志条目
   auto replay_callback = [&replayer, &max_lsn](LogEntry &entry) -> RC {
     if (entry.lsn() > max_lsn) {
       max_lsn = entry.lsn();
@@ -83,13 +84,13 @@ RC DiskLogHandler::replay(LogReplayer &replayer, LSN start_lsn)
     return replayer.replay(entry);
   };
 
-  RC rc = iterate(replay_callback, start_lsn);
+  RC rc = iterate(replay_callback, start_lsn);  // 遍历start_lsn后的日志文件并回放
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to iterate log entries. rc=%s", strrc(rc));
     return rc;
   }
 
-  rc = entry_buffer_.init(max_lsn);
+  rc = entry_buffer_.init(max_lsn); // 更新日志缓冲区的lsn
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to init log entry buffer. rc=%s", strrc(rc));
     return rc;
@@ -199,7 +200,7 @@ void DiskLogHandler::thread_func()
     }
 
     if (flush_count == 0 && rc == RC::SUCCESS) {
-      this_thread::sleep_for(chrono::milliseconds(100));
+      this_thread::sleep_for(chrono::milliseconds(100));  // 如果刷新时日志为空，休眠100ms
       continue;
     }
   }

@@ -28,7 +28,7 @@ RC SqlResult::open()
     return RC::INVALID_ARGUMENT;
   }
 
-  Trx *trx = session_->current_trx();
+  Trx *trx = session_->current_trx();   // 这里会创建事务
   trx->start_if_need();
   return operator_->open(trx);
 }
@@ -47,7 +47,7 @@ RC SqlResult::close()
 
   if (session_ && !session_->is_trx_multi_operation_mode()) {
     if (rc == RC::SUCCESS) {
-      rc = session_->current_trx()->commit();
+      rc = session_->current_trx()->commit();   // 单语句自动提交
     } else {
       RC rc2 = session_->current_trx()->rollback();
       if (rc2 != RC::SUCCESS) {

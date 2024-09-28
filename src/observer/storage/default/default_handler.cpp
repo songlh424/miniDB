@@ -51,7 +51,7 @@ RC DefaultHandler::init(const char *base_dir, const char *trx_kit_name, const ch
 
   const char *sys_db = "sys";
 
-  RC ret = create_db(sys_db);
+  RC ret = create_db(sys_db);     // 创建成功和已存在两个状态才能继续往下
   if (ret != RC::SUCCESS && ret != RC::SCHEMA_DB_EXIST) {
     LOG_ERROR("Failed to create system db");
     return ret;
@@ -63,6 +63,7 @@ RC DefaultHandler::init(const char *base_dir, const char *trx_kit_name, const ch
     return ret;
   }
 
+  // 设置默认会话的数据库
   Session &default_session = Session::default_session();
   default_session.set_current_db(sys_db);
 

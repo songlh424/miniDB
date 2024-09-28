@@ -75,5 +75,5 @@ private:
   atomic<LSN> current_lsn_{0};  /// 当前缓冲区中最大日志序列号
   atomic<LSN> flushed_lsn_{0};  /// 当前缓冲区中已经刷新到磁盘的日志序列号
 
-  int32_t max_bytes_ = 4 * 1024 * 1024;  /// 缓冲区最大字节数
+  int32_t max_bytes_ = 4 * 1024 * 1024;  /// 缓冲区最大字节数，4MB
 };

@@ -83,7 +83,7 @@ public:
   ~BufferPoolLogHandler() = default;
 
   /**
-   * @brief 分配一个页面
+   * @brief 分配一个页面的日志
    * @param page_num 分配的页面号
    * @param[out] lsn 分配页面的日志序列号
    * @note TODO 可以把frame传过来，记录完日志，直接更新页面的lsn
@@ -91,7 +91,7 @@ public:
   RC allocate_page(PageNum page_num, LSN &lsn);
 
   /**
-   * @brief 释放一个页面
+   * @brief 释放一个页面的日志
    * @param page_num 释放的页面编号
    * @param[out] lsn 释放页面的日志序列号
    */
@@ -122,6 +122,7 @@ public:
   virtual ~BufferPoolLogReplayer() = default;
 
   ///! @copydoc LogReplayer::replay
+  // 主要实现页面分配和释放的重放
   RC replay(const LogEntry &entry) override;
 
 private:

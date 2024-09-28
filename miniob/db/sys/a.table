@@ -1,0 +1,33 @@
+{
+	"fields" : 
+	[
+		{
+			"FIELD_id" : 0,
+			"len" : 4,
+			"name" : "id",
+			"offset" : 0,
+			"type" : "ints",
+			"visible" : true
+		},
+		{
+			"FIELD_id" : 1,
+			"len" : 9,
+			"name" : "name",
+			"offset" : 4,
+			"type" : "chars",
+			"visible" : true
+		},
+		{
+			"FIELD_id" : 2,
+			"len" : 2,
+			"name" : "sex",
+			"offset" : 13,
+			"type" : "chars",
+			"visible" : true
+		}
+	],
+	"indexes" : null,
+	"storage_format" : 1,
+	"table_id" : 1,
+	"table_name" : "a"
+}

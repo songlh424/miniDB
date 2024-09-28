@@ -34,7 +34,7 @@ public:
   DoubleWritePageKey key;
   int32_t            page_index = -1; /// 页面在double write buffer文件中的页索引
   bool               valid = true; /// 表示页面是否有效，在页面被删除时，需要同时标记磁盘上的值。
-  Page               page;
+  Page               page;  /// 页结构体，包括页号、校验和和页数据
 
   static const int32_t SIZE;
 };
@@ -72,25 +72,26 @@ RC DiskDoubleWriteBuffer::open_file(const char *filename)
   }
 
   file_desc_ = fd;
+  // 将文件中所有页面都加载进内存中
   return load_pages();
 }
 
 RC DiskDoubleWriteBuffer::flush_page()
 {
-  sync();
+  sync(); // 刷系统缓存到磁盘
 
   for (const auto &pair : dblwr_pages_) {
-    RC rc = write_page(pair.second);
+    RC rc = write_page(pair.second);    // 将与该页面关联的buffer_pool中的页面刷到磁盘中
     if (rc != RC::SUCCESS) {
       return rc;
     }
-    pair.second->valid = false;
-    write_page_internal(pair.second);
+    pair.second->valid = false;   // 然后可以设置doubleWrite对应的页面为无效
+    write_page_internal(pair.second); // 再将doubleWrite中的page写到磁盘中
     delete pair.second;
   }
 
-  dblwr_pages_.clear();
-  header_.page_cnt = 0;
+  dblwr_pages_.clear();   // 内存中页面全刷到磁盘后，清空map
+  header_.page_cnt = 0;   // 由于buffer_pool中的页面已经刷到磁盘，所以将header中的页面计数设置为0
 
   return RC::SUCCESS;
 }
@@ -99,6 +100,7 @@ RC DiskDoubleWriteBuffer::add_page(DiskBufferPool *bp, PageNum page_num, Page &p
 {
   scoped_lock lock_guard(lock_);
   DoubleWritePageKey key{bp->id(), page_num};
+  // key值存在，命中缓存了，将原来的页面刷新到磁盘中
   auto iter = dblwr_pages_.find(key);
   if (iter != dblwr_pages_.end()) {
     iter->second->page = page;
@@ -106,7 +108,7 @@ RC DiskDoubleWriteBuffer::add_page(DiskBufferPool *bp, PageNum page_num, Page &p
               bp->id(), page_num, page.lsn, static_cast<int>(dblwr_pages_.size()));
     return write_page_internal(iter->second);
   }
-
+  // 没有命中，插入到map中，并写入磁盘
   int64_t          page_cnt   = dblwr_pages_.size();
   DoubleWritePage *dblwr_page = new DoubleWritePage(bp->id(), page_num, page_cnt, page);
   dblwr_pages_.insert(std::pair<DoubleWritePageKey, DoubleWritePage *>(key, dblwr_page));
@@ -119,7 +121,7 @@ RC DiskDoubleWriteBuffer::add_page(DiskBufferPool *bp, PageNum page_num, Page &p
         strrc(rc), bp->id(), page_num, page.lsn);
     return rc;
   }
-
+  // 更新文件头的页数并刷到磁盘
   if (page_cnt + 1 > header_.page_cnt) {
     header_.page_cnt = page_cnt + 1;
     if (lseek(file_desc_, 0, SEEK_SET) == -1) {
@@ -132,7 +134,8 @@ RC DiskDoubleWriteBuffer::add_page(DiskBufferPool *bp, PageNum page_num, Page &p
       return RC::IOERR_WRITE;
     }
   }
-
+  // 内存中页面数超过了最大值的限制，将内存中的页面全刷到磁盘中
+  // 是否需要内存页已满就将全部内容刷到磁盘？？？
   if (static_cast<int>(dblwr_pages_.size()) >= max_pages_) {
     RC rc = flush_page();
     if (rc != RC::SUCCESS) {
@@ -144,6 +147,7 @@ RC DiskDoubleWriteBuffer::add_page(DiskBufferPool *bp, PageNum page_num, Page &p
   return RC::SUCCESS;
 }
 
+// 中间写，根据页索引写到DoubleWrite文件对应的偏移量的位置
 RC DiskDoubleWriteBuffer::write_page_internal(DoubleWritePage *page)
 {
   int32_t page_index = page->page_index;
@@ -161,6 +165,7 @@ RC DiskDoubleWriteBuffer::write_page_internal(DoubleWritePage *page)
   return RC::SUCCESS;
 }
 
+// 将与DoubleWrite页相关联的buffer_pool中的页写到磁盘
 RC DiskDoubleWriteBuffer::write_page(DoubleWritePage *dblwr_page)
 {
   DiskBufferPool *disk_buffer = nullptr;
@@ -170,15 +175,17 @@ RC DiskDoubleWriteBuffer::write_page(DoubleWritePage *dblwr_page)
               dblwr_page->key.buffer_pool_id, dblwr_page->key.page_num, dblwr_page->page.lsn);
     return RC::SUCCESS;
   }
+  //根据id获取对应的buffer_pool
   RC rc = bp_manager_.get_buffer_pool(dblwr_page->key.buffer_pool_id, disk_buffer);
   ASSERT(OB_SUCC(rc) && disk_buffer != nullptr, "failed to get disk buffer pool of %d", dblwr_page->key.buffer_pool_id);
 
   LOG_TRACE("double write buffer write page. buffer_pool_id:%d,page_num:%d,lsn=%d",
             dblwr_page->key.buffer_pool_id, dblwr_page->key.page_num, dblwr_page->page.lsn);
-
+  // 将buffer_pool中对应写到磁盘中
   return disk_buffer->write_page(dblwr_page->key.page_num, dblwr_page->page);
 }
 
+// 从DoubleWrite中内存页找，找到放到page参数中
 RC DiskDoubleWriteBuffer::read_page(DiskBufferPool *bp, PageNum page_num, Page &page)
 {
   scoped_lock lock_guard(lock_);
@@ -193,10 +200,12 @@ RC DiskDoubleWriteBuffer::read_page(DiskBufferPool *bp, PageNum page_num, Page &
   return RC::BUFFERPOOL_INVALID_PAGE_NUM;
 }
 
+// 清空与指定buffer_pool相关联的页面
+// 清空操作：将buffer_pool中对应页面写到磁盘，并将内存页也写到磁盘中
 RC DiskDoubleWriteBuffer::clear_pages(DiskBufferPool *buffer_pool)
 {
   vector<DoubleWritePage *> spec_pages;
-  
+  // 找到与指定buffer_pool相关联的内存页
   auto remove_pred = [&spec_pages, buffer_pool](const pair<DoubleWritePageKey, DoubleWritePage *> &pair) {
     DoubleWritePage *dbl_page = pair.second;
     if (buffer_pool->id() == dbl_page->key.buffer_pool_id) {
@@ -220,13 +229,13 @@ RC DiskDoubleWriteBuffer::clear_pages(DiskBufferPool *buffer_pool)
 
   RC rc = RC::SUCCESS;
   for (DoubleWritePage *dbl_page : spec_pages) {
-    rc = buffer_pool->write_page(dbl_page->key.page_num, dbl_page->page);
+    rc = buffer_pool->write_page(dbl_page->key.page_num, dbl_page->page); // 写到磁盘
     if (OB_FAIL(rc)) {
       LOG_WARN("Failed to write page %s:%d to disk buffer pool. rc=%s",
                buffer_pool->filename(), dbl_page->key.page_num, strrc(rc));
       break;
     }
-    dbl_page->valid = false;
+    dbl_page->valid = false;  // 设置无效标志
     write_page_internal(dbl_page);
   }
 
@@ -246,12 +255,12 @@ RC DiskDoubleWriteBuffer::load_pages()
     LOG_ERROR("Failed to load pages, due to double write buffer is not empty. opened?");
     return RC::BUFFERPOOL_OPEN;
   }
-
+  // 移到文件头
   if (lseek(file_desc_, 0, SEEK_SET) == -1) {
     LOG_ERROR("Failed to load page header, due to failed to lseek:%s.", strerror(errno));
     return RC::IOERR_SEEK;
   }
-
+  // 读取文件头，获取页数
   int ret = readn(file_desc_, &header_, sizeof(header_));
   if (ret != 0 && ret != -1) {
     LOG_ERROR("Failed to load page header, file_desc:%d, due to failed to read data:%s, ret=%d",
@@ -260,6 +269,7 @@ RC DiskDoubleWriteBuffer::load_pages()
   }
 
   for (int page_num = 0; page_num < header_.page_cnt; page_num++) {
+    // 计算每页的偏移量
     int64_t offset = ((int64_t)page_num) * DoubleWritePage::SIZE + DoubleWriteBufferHeader::SIZE;
 
     if (lseek(file_desc_, offset, SEEK_SET) == -1) {
@@ -270,7 +280,7 @@ RC DiskDoubleWriteBuffer::load_pages()
     auto dblwr_page = make_unique<DoubleWritePage>();
     Page &page     = dblwr_page->page;
     page.check_sum = (CheckSum)-1;
-
+    // 读取一页内容
     ret = readn(file_desc_, dblwr_page.get(), DoubleWritePage::SIZE);
     if (ret != 0) {
       LOG_ERROR("Failed to load page, file_desc:%d, page num:%d, due to failed to read data:%s, ret=%d, page count=%d",

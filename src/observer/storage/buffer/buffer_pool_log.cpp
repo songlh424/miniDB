@@ -74,6 +74,7 @@ RC BufferPoolLogReplayer::replay(const LogEntry &entry)
   
   int32_t buffer_pool_id = log->buffer_pool_id;
   DiskBufferPool *buffer_pool = nullptr;
+  // 先找到日志文件对应的buffer pool
   RC rc = bp_manager_.get_buffer_pool(buffer_pool_id, buffer_pool);
   if (OB_FAIL(rc) || buffer_pool == nullptr) {
     LOG_ERROR("failed to get buffer pool. rc=%s, buffer pool=%p, log=%s, %s", 

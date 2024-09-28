@@ -98,7 +98,7 @@ RC LogFileReader::skip_to(LSN start_lsn)
     return RC::FILE_NOT_OPENED;
   }
 
-  off_t pos = lseek(fd_, 0, SEEK_SET);
+  off_t pos = lseek(fd_, 0, SEEK_SET);  //文件开头
   if (off_t(-1) == pos) {
     LOG_WARN("seek file failed. seek to the beginning. filename=%s, error=%s", filename_.c_str(), strerror(errno));
     return RC::IOERR_SEEK;
@@ -106,6 +106,7 @@ RC LogFileReader::skip_to(LSN start_lsn)
 
   LogHeader header;
   while (true) {
+    // 读取日志头，先不读取日志数据部分
     int ret = readn(fd_, reinterpret_cast<char *>(&header), LogHeader::SIZE);
     if (0 != ret) {
       if (-1 == ret) {
@@ -116,8 +117,8 @@ RC LogFileReader::skip_to(LSN start_lsn)
       return RC::IOERR_READ;
     }
 
-    if (header.lsn >= start_lsn) {
-      off_t pos = lseek(fd_, -LogHeader::SIZE, SEEK_CUR);
+    if (header.lsn >= start_lsn) {  // 当前日志序列号大于等于起始日志序列号，即找到了，break出去
+      off_t pos = lseek(fd_, -LogHeader::SIZE, SEEK_CUR); // 回到日志头起始部分
       if (off_t(-1) == pos) {
         LOG_WARN("seek file failed. skip back log header. filename=%s, error=%s", filename_.c_str(), strerror(errno));
         return RC::IOERR_SEEK;
@@ -130,7 +131,7 @@ RC LogFileReader::skip_to(LSN start_lsn)
       return RC::IOERR_READ;
     }
 
-    pos = lseek(fd_, header.size, SEEK_CUR);
+    pos = lseek(fd_, header.size, SEEK_CUR);  // 日志序列号不满足要求，跳过日志数据部分
     if (off_t(-1) == pos) {
       LOG_WARN("seek file failed. skip log entry payload. filename=%s, error=%s", filename_.c_str(), strerror(errno));
       return RC::IOERR_SEEK;
@@ -195,13 +196,14 @@ RC LogFileWriter::write(LogEntry &entry)
 
   /// WARNING 这里需要处理日志写一半的情况
   /// 日志只写成功一部分到文件中非常难处理
+  // 先写日志头
   int ret = writen(fd_, reinterpret_cast<const char *>(&entry.header()), LogHeader::SIZE);
   if (0 != ret) {
     LOG_WARN("write log entry header failed. filename=%s, ret = %d, error=%s, entry=%s", 
              filename_.c_str(), ret, strerror(errno), entry.to_string().c_str());
     return RC::IOERR_WRITE;
   }
-
+  // 再写日志数据部分
   ret = writen(fd_, entry.data(), entry.payload_size());
   if (0 != ret) {
     LOG_WARN("write log entry payload failed. filename=%s, ret = %d, error=%s, entry=%s", 
@@ -234,17 +236,17 @@ string LogFileWriter::to_string() const
 
 RC LogFileManager::init(const char *directory, int max_entry_number_per_file)
 {
-  directory_ = filesystem::absolute(filesystem::path(directory));
+  directory_ = filesystem::absolute(filesystem::path(directory)); // 绝对路径
   max_entry_number_per_file_ = max_entry_number_per_file;
 
-  filesystem::file_status  directory_status = filesystem::status(directory_);
+  filesystem::file_status  directory_status = filesystem::status(directory_); // 获取目录状态
 
   // 检查目录是否存在，不存在就创建出来
   if (!filesystem::is_directory(directory_)) {
     LOG_INFO("directory is not exist. directory=%s", directory_.c_str());
 
     error_code ec;
-    bool ret = filesystem::create_directories(directory_, ec);
+    bool ret = filesystem::create_directories(directory_, ec);  // 创建目录
     if (!ret) {
       LOG_WARN("create directory failed. directory=%s, error=%s", directory_.c_str(), ec.message().c_str());
       return RC::FILE_CREATE;
@@ -259,12 +261,12 @@ RC LogFileManager::init(const char *directory, int max_entry_number_per_file)
 
     string filename = dir_entry.path().filename().string();
     LSN lsn = 0;
-    RC rc = get_lsn_from_filename(filename, lsn);
+    RC rc = get_lsn_from_filename(filename, lsn); // 从文件名获取lsn
     if (OB_FAIL(rc)) {
       LOG_TRACE("invalid log file name. filename=%s", filename.c_str());
       continue;
     }
-
+    // 检查lsn是否合法，lsn应该是唯一的
     if (log_files_.find(lsn) != log_files_.end()) {
       LOG_TRACE("duplicate log file. filename1=%s, filename2=%s", 
                 filename.c_str(), log_files_.find(lsn)->second.filename().c_str());
@@ -314,7 +316,7 @@ RC LogFileManager::list_files(vector<string> &files, LSN start_lsn)
 RC LogFileManager::last_file(LogFileWriter &file_writer)
 {
   if (log_files_.empty()) {
-    return next_file(file_writer);
+    return next_file(file_writer);  // 打开一个新的日志文件
   }
 
   file_writer.close();
@@ -330,7 +332,7 @@ RC LogFileManager::next_file(LogFileWriter &file_writer)
 
   LSN lsn = 0;
   if (!log_files_.empty()) {
-    lsn = log_files_.rbegin()->first + max_entry_number_per_file_;
+    lsn = log_files_.rbegin()->first + max_entry_number_per_file_;  // 新文件的lsn
   }
 
   string filename = file_prefix_ + std::to_string(lsn) + file_suffix_;

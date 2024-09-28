@@ -147,7 +147,7 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
   db_       = db;
   base_dir_ = base_dir;
 
-  // 加载数据文件
+  // 创建表的记录处理器，跟数据文件关联
   RC rc = init_record_handler(base_dir);
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to open table %s due to init record handler failed.", base_dir);
@@ -155,10 +155,11 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
     return rc;
   }
 
+  // 创建索引结构，与索引文件关联
   const int index_num = table_meta_.index_num();
   for (int i = 0; i < index_num; i++) {
-    const IndexMeta *index_meta = table_meta_.index(i);
-    const FieldMeta *field_meta = table_meta_.field(index_meta->field());
+    const IndexMeta *index_meta = table_meta_.index(i);   // 索引的元数据
+    const FieldMeta *field_meta = table_meta_.field(index_meta->field());   // 索引的字段
     if (field_meta == nullptr) {
       LOG_ERROR("Found invalid index meta info which has a non-exists field. table=%s, index=%s, field=%s",
                 name(), index_meta->name(), index_meta->field());
@@ -169,7 +170,7 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
 
     BplusTreeIndex *index      = new BplusTreeIndex();
     string          index_file = table_index_file(base_dir, name(), index_meta->name());
-
+    // 主要是为了初始化BplusTreeHandler，创建对应buffer_pool以及读取索引文件的头页面信息
     rc = index->open(this, index_file.c_str(), *index_meta, *field_meta);
     if (rc != RC::SUCCESS) {
       delete index;
@@ -188,12 +189,13 @@ RC Table::open(Db *db, const char *meta_file, const char *base_dir)
 RC Table::insert_record(Record &record)
 {
   RC rc = RC::SUCCESS;
+  // 插入到数据文件中，找到空闲的页面并插入，没找到就分配一个新页面
   rc    = record_handler_->insert_record(record.data(), table_meta_.record_size(), &record.rid());
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Insert record failed. table name=%s, rc=%s", table_meta_.name(), strrc(rc));
     return rc;
   }
-
+  // 插入到索引
   rc = insert_entry_of_indexes(record.data(), record.rid());
   if (rc != RC::SUCCESS) {  // 可能出现了键值重复
     RC rc2 = delete_entry_of_indexes(record.data(), record.rid(), false /*error_on_not_exists*/);
@@ -299,15 +301,16 @@ RC Table::init_record_handler(const char *base_dir)
 {
   string data_file = table_data_file(base_dir, table_meta_.name());
 
+  // 针对表创建一个对应的bufferpool对象
   BufferPoolManager &bpm = db_->buffer_pool_manager();
   RC                 rc  = bpm.open_file(db_->log_handler(), data_file.c_str(), data_buffer_pool_);
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to open disk buffer pool for file:%s. rc=%d:%s", data_file.c_str(), rc, strrc(rc));
     return rc;
   }
-
+  // 创建表的记录处理器，用于处理整张表的增删改查
   record_handler_ = new RecordFileHandler(table_meta_.storage_format());
-
+  // 该初始化动作会收集文件中未填满的页号
   rc = record_handler_->init(*data_buffer_pool_, db_->log_handler(), &table_meta_);
   if (rc != RC::SUCCESS) {
     LOG_ERROR("Failed to init record handler. rc=%s", strrc(rc));

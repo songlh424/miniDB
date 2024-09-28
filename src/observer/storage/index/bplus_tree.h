@@ -203,7 +203,7 @@ struct IndexFileHeader
 };
 
 /**
- * @brief the common part of page describtion of bplus tree
+ * @brief 每个索引页共同的header
  * @ingroup BPlusTree
  * @code
  * storage format:
@@ -220,7 +220,7 @@ struct IndexNode
 };
 
 /**
- * @brief leaf page of bplus tree
+ * @brief 叶子节点
  * @ingroup BPlusTree
  * @code
  * storage format:
@@ -230,7 +230,7 @@ struct IndexNode
  * the key is in format: the key value of record and rid.
  * so the key in leaf page must be unique.
  * the value is rid.
- * can you implenment a cluster index ?
+ * 当前不是聚集索引？记录的是页面中的rid
  */
 struct LeafIndexNode : public IndexNode
 {
@@ -244,7 +244,7 @@ struct LeafIndexNode : public IndexNode
 };
 
 /**
- * @brief internal page of bplus tree
+ * @brief B+树的中间节点
  * @ingroup BPlusTree
  * @code
  * storage format:
@@ -290,10 +290,10 @@ public:
   /// @brief 存储的键值对的大小。值是指叶子节点中存放的数据
   virtual int item_size() const;
 
-  void    increase_size(int n);
+  void    increase_size(int n); // 增加键值对的数量
   int     size() const;
   int     max_size() const;
-  int     min_size() const;
+  int     min_size() const; // 页面最少键值对数量
   RC      set_parent_page_num(PageNum page_num);
   PageNum parent_page_num() const;
   PageNum page_num() const;
@@ -315,7 +315,7 @@ public:
 
   friend string to_string(const IndexNodeHandler &handler);
 
-  RC recover_insert_items(int index, const char *items, int num);
+  RC recover_insert_items(int index, const char *items, int num); // 恢复插入的键值对
   RC recover_remove_items(int index, int num);
 
 protected:

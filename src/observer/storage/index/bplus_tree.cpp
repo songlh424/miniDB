@@ -191,7 +191,7 @@ LeafIndexNodeHandler::LeafIndexNodeHandler(BplusTreeMiniTransaction &mtr, const 
 
 RC LeafIndexNodeHandler::init_empty()
 {
-  RC rc = mtr_.logger().leaf_init_empty(*this);
+  RC rc = mtr_.logger().leaf_init_empty(*this); // 创建日志
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to log init empty leaf node. rc=%s", strrc(rc));
     return rc;
@@ -242,7 +242,7 @@ RC LeafIndexNodeHandler::insert(int index, const char *key, const char *value)
   memcpy(item.data(), key, key_size());
   memcpy(item.data() + key_size(), value, value_size());
 
-  RC rc = mtr_.logger().node_insert_items(*this, index, item, 1);
+  RC rc = mtr_.logger().node_insert_items(*this, index, item, 1);   // 先写日志
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to log insert item. rc=%s", strrc(rc));
     return rc;
@@ -804,6 +804,7 @@ RC BplusTreeHandler::create(LogHandler &log_handler,
                             int internal_max_size /* = -1*/,
                             int leaf_max_size /* = -1 */)
 {
+  // 创建索引文件
   RC rc = bpm.create_file(file_name);
   if (OB_FAIL(rc)) {
     LOG_WARN("Failed to create file. file name=%s, rc=%d:%s", file_name, rc, strrc(rc));
@@ -812,7 +813,7 @@ RC BplusTreeHandler::create(LogHandler &log_handler,
   LOG_INFO("Successfully create index file:%s", file_name);
 
   DiskBufferPool *bp = nullptr;
-
+  // 创建对应的buffer_pool
   rc = bpm.open_file(log_handler, file_name, bp);
   if (OB_FAIL(rc)) {
     LOG_WARN("Failed to open file. file name=%s, rc=%d:%s", file_name, rc, strrc(rc));
@@ -837,9 +838,11 @@ RC BplusTreeHandler::create(LogHandler &log_handler,
             int internal_max_size /* = -1 */,
             int leaf_max_size /* = -1 */)
 {
+  // 非叶子节点的最大容量
   if (internal_max_size < 0) {
     internal_max_size = calc_internal_page_capacity(attr_length);
   }
+  // 叶子节点的最大容量
   if (leaf_max_size < 0) {
     leaf_max_size = calc_leaf_page_capacity(attr_length);
   }
@@ -849,7 +852,7 @@ RC BplusTreeHandler::create(LogHandler &log_handler,
 
   RC rc = RC::SUCCESS;
 
-  BplusTreeMiniTransaction mtr(*this, &rc);
+  BplusTreeMiniTransaction mtr(*this, &rc);   // 创建一个mini事务
 
   Frame *header_frame = nullptr;
 
@@ -916,6 +919,7 @@ RC BplusTreeHandler::open(LogHandler &log_handler, BufferPoolManager &bpm, const
 
   DiskBufferPool    *disk_buffer_pool = nullptr;
 
+  // 创建对应的buffer_pool
   RC rc = bpm.open_file(log_handler, file_name, disk_buffer_pool);
   if (OB_FAIL(rc)) {
     LOG_WARN("Failed to open file name=%s, rc=%d:%s", file_name, rc, strrc(rc));
@@ -938,6 +942,7 @@ RC BplusTreeHandler::open(LogHandler &log_handler, DiskBufferPool &buffer_pool)
 
   RC rc = RC::SUCCESS;
 
+  // 加载索引文件的第一个页面到内存
   Frame *frame = nullptr;
   rc           = buffer_pool.get_this_page(FIRST_INDEX_PAGE, &frame);
   if (OB_FAIL(rc)) {
@@ -951,6 +956,7 @@ RC BplusTreeHandler::open(LogHandler &log_handler, DiskBufferPool &buffer_pool)
   disk_buffer_pool_ = &buffer_pool;
   log_handler_      = &log_handler;
 
+  // 初始化内存池
   mem_pool_item_ = make_unique<common::MemPoolItem>("b+tree");
   if (mem_pool_item_->init(file_header_.key_length) < 0) {
     LOG_WARN("Failed to init memory pool for index");
@@ -959,6 +965,7 @@ RC BplusTreeHandler::open(LogHandler &log_handler, DiskBufferPool &buffer_pool)
   }
 
   // close old page_handle
+  // 此时索引文件第一个页面可以淘汰
   buffer_pool.unpin_page(frame);
 
   key_comparator_.init(file_header_.attr_type, file_header_.attr_length);
@@ -1230,7 +1237,7 @@ RC BplusTreeHandler::find_leaf_internal(BplusTreeMiniTransaction &mtr, BplusTree
   PageNum    next_page_id;
   for (; !node->is_leaf;) {
     InternalIndexNodeHandler internal_node(mtr, file_header_, frame);
-    next_page_id = child_page_getter(internal_node);
+    next_page_id = child_page_getter(internal_node);  // 找到下一个分支
     rc           = crabing_protocal_fetch_page(mtr, op, next_page_id, false /* is_root_node */, frame);
     if (OB_FAIL(rc)) {
       LOG_WARN("Failed to load page page_num:%d. rc=%s", next_page_id, strrc(rc));
@@ -1242,6 +1249,7 @@ RC BplusTreeHandler::find_leaf_internal(BplusTreeMiniTransaction &mtr, BplusTree
   return RC::SUCCESS;
 }
 
+// 获取指定页号的帧，并加锁，在确定当前节点不会分裂或合并时，释放前面的锁
 RC BplusTreeHandler::crabing_protocal_fetch_page(
     BplusTreeMiniTransaction &mtr, BplusTreeOperationType op, PageNum page_num, bool is_root_node, Frame *&frame)
 {
@@ -1274,6 +1282,7 @@ RC BplusTreeHandler::insert_entry_into_leaf_node(BplusTreeMiniTransaction &mtr, 
     return RC::RECORD_DUPLICATE_KEY;
   }
 
+  // 如果叶子节点还有空间，则直接插入
   if (leaf_node.size() < leaf_node.max_size()) {
     leaf_node.insert(insert_position, key, (const char *)rid);
     frame->mark_dirty();
@@ -1293,6 +1302,7 @@ RC BplusTreeHandler::insert_entry_into_leaf_node(BplusTreeMiniTransaction &mtr, 
   new_index_node.set_parent_page_num(leaf_node.parent_page_num());
   leaf_node.set_next_page(new_frame->page_num());
 
+  // 插入老节点
   if (insert_position < leaf_node.size()) {
     leaf_node.insert(insert_position, key, (const char *)rid);
   } else {
@@ -1482,6 +1492,7 @@ RC BplusTreeHandler::create_new_tree(BplusTreeMiniTransaction &mtr, const char *
   LeafIndexNodeHandler leaf_node(mtr, file_header_, frame);
   leaf_node.init_empty();
   leaf_node.insert(0, key, (const char *)rid);
+  // 更新索引文件头页面
   update_root_page_num_locked(mtr, frame->page_num());
   frame->mark_dirty();
 
@@ -1534,6 +1545,7 @@ RC BplusTreeHandler::insert_entry(const char *user_key, const RID *rid)
 
   Frame *frame = nullptr;
 
+  // 找到应该插入的叶子节点对应的页帧frame
   rc = find_leaf(mtr, BplusTreeOperationType::INSERT, key, frame);
   if (OB_FAIL(rc)) {
     LOG_WARN("Failed to find leaf %s. rc=%d:%s", rid->to_string().c_str(), rc, strrc(rc));

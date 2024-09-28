@@ -59,6 +59,7 @@ void parse_parameter(int argc, char **argv)
   // Process args
   int          opt;
   extern char *optarg;
+  // 带跟冒号的选项必须有参数
   while ((opt = getopt(argc, argv, "dp:P:s:t:T:f:o:e:hn:")) > 0) {
     switch (opt) {
       case 's': process_param->set_unix_socket_path(optarg); break;
@@ -184,7 +185,7 @@ int main(int argc, char **argv)
   cout << startup_tips;
 
   set_signal_handler(quit_signal_handle);
-
+  // 解析参数
   parse_parameter(argc, argv);
 
   rc = init(the_process_param());

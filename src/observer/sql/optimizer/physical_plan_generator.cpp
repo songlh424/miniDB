@@ -123,14 +123,15 @@ RC PhysicalPlanGenerator::create_vec(LogicalOperator &logical_operator, unique_p
 
 RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, unique_ptr<PhysicalOperator> &oper)
 {
+  // 拿到谓词
   vector<unique_ptr<Expression>> &predicates = table_get_oper.predicates();
   // 看看是否有可以用于索引查找的表达式
-  Table *table = table_get_oper.table();
+  Table *table = table_get_oper.table();  // 拿到表
 
   Index     *index      = nullptr;
   ValueExpr *value_expr = nullptr;
   for (auto &expr : predicates) {
-    if (expr->type() == ExprType::COMPARISON) {
+    if (expr->type() == ExprType::COMPARISON) { // 比较表达式
       auto comparison_expr = static_cast<ComparisonExpr *>(expr.get());
       // 简单处理，就找等值查询
       if (comparison_expr->comp() != EQUAL_TO) {
@@ -139,7 +140,7 @@ RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, u
 
       unique_ptr<Expression> &left_expr  = comparison_expr->left();
       unique_ptr<Expression> &right_expr = comparison_expr->right();
-      // 左右比较的一边最少是一个值
+      // 左右比较的一边最少是一个值，都不为值跳过
       if (left_expr->type() != ExprType::VALUE && right_expr->type() != ExprType::VALUE) {
         continue;
       }
@@ -160,13 +161,14 @@ RC PhysicalPlanGenerator::create_plan(TableGetLogicalOperator &table_get_oper, u
       }
 
       const Field &field = field_expr->field();
+      // 找这个字段是不是索引
       index              = table->find_index_by_field(field.field_name());
       if (nullptr != index) {
         break;
       }
     }
   }
-
+  // 处理比较粗暴：如果有索引，用索引查找，否则用表查找
   if (index != nullptr) {
     ASSERT(value_expr != nullptr, "got an index but value expr is null ?");
 

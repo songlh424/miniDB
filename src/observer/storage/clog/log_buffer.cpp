@@ -52,7 +52,7 @@ RC LogEntryBuffer::append(LSN &lsn, LogModule module, vector<char> &&data)
 
   lock_guard guard(mutex_);
   lsn = ++current_lsn_;
-  entry.set_lsn(lsn);
+  entry.set_lsn(lsn); // 在日志条目写入时再写入lsn
 
   entries_.push_back(std::move(entry));
   bytes_ += entry.total_size();
@@ -71,7 +71,7 @@ RC LogEntryBuffer::flush(LogFileWriter &writer, int &count)
         break;
       }
 
-      LogEntry &front_entry = entries_.front();
+      LogEntry &front_entry = entries_.front(); // 获取第一个日志条目
       ASSERT(front_entry.lsn() > 0 && front_entry.payload_size() > 0, "invalid log entry");
       entry = std::move(entries_.front());
       ASSERT(entry.payload_size() > 0 && entry.lsn() > 0, "invalid log entry");
@@ -82,7 +82,7 @@ RC LogEntryBuffer::flush(LogFileWriter &writer, int &count)
     RC rc = writer.write(entry);
     if (OB_FAIL(rc)) {
       lock_guard guard(mutex_);
-      entries_.emplace_front(std::move(entry));
+      entries_.emplace_front(std::move(entry)); // 写入失败，将日志条目放回队列头部
       LogEntry &front_entry = entries_.front();
       ASSERT(front_entry.lsn() > 0 && front_entry.payload_size() > 0, "invalid log entry");
       return rc;

@@ -61,6 +61,7 @@ RC Db::init(const char *name, const char *dbpath, const char *trx_kit_name, cons
     return RC::INVALID_ARGUMENT;
   }
 
+  // 初始化事务管理器
   TrxKit *trx_kit = TrxKit::create(trx_kit_name);
   if (trx_kit == nullptr) {
     LOG_ERROR("Failed to create trx kit: %s", trx_kit_name);
@@ -69,6 +70,7 @@ RC Db::init(const char *name, const char *dbpath, const char *trx_kit_name, cons
 
   trx_kit_.reset(trx_kit);
 
+  // 初始化bufferPoolManager和double write buffer
   buffer_pool_manager_ = make_unique<BufferPoolManager>();
   auto dblwr_buffer    = make_unique<DiskDoubleWriteBuffer>(*buffer_pool_manager_);
 
@@ -87,6 +89,7 @@ RC Db::init(const char *name, const char *dbpath, const char *trx_kit_name, cons
     return rc;
   }
 
+  // 初始化日志模块，该日志模块接收来自事务、日志等模块的日志写入请求
   filesystem::path clog_path       = filesystem::path(dbpath) / "clog";
   LogHandler      *tmp_log_handler = nullptr;
   rc                               = LogHandler::create(log_handler_name, tmp_log_handler);
@@ -105,21 +108,22 @@ RC Db::init(const char *name, const char *dbpath, const char *trx_kit_name, cons
   name_ = name;
   path_ = dbpath;
 
-  // 加载数据库本身的元数据
+  // 读取数据库元数据，目前元数据只记录check_point_lsn_
+  // 若文件不存在，表示直接为0
   rc = init_meta();
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to init meta. dbpath=%s, rc=%s", dbpath, strrc(rc));
     return rc;
   }
 
-  // 打开所有表
+  // 打开所有表，并将其存储在opened_tables_的哈希表中
   // 在实际生产数据库中，直接打开所有表，可能耗时会比较长
   rc = open_all_tables();
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to open all tables. dbpath=%s, rc=%s", dbpath, strrc(rc));
     return rc;
   }
-
+  // 会把数据刷盘
   rc = init_dblwr_buffer();
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to init dblwr buffer. rc = %s", strrc(rc));
@@ -183,7 +187,7 @@ Table *Db::find_table(int32_t table_id) const
 RC Db::open_all_tables()
 {
   vector<string> table_meta_files;
-
+  // 匹配.table结尾的数据表元数据文件
   int ret = list_file(path_.c_str(), TABLE_META_FILE_PATTERN, table_meta_files);
   if (ret < 0) {
     LOG_ERROR("Failed to list table meta files under %s.", path_.c_str());
@@ -192,6 +196,7 @@ RC Db::open_all_tables()
 
   RC rc = RC::SUCCESS;
   for (const string &filename : table_meta_files) {
+    // 为每个表元数据文件创建一个Table对象
     Table *table = new Table();
     rc           = table->open(this, filename.c_str(), path_.c_str());
     if (rc != RC::SUCCESS) {
@@ -199,7 +204,7 @@ RC Db::open_all_tables()
       LOG_ERROR("Failed to open table. filename=%s", filename.c_str());
       return rc;
     }
-
+    // 已打开的先删除
     if (opened_tables_.count(table->name()) != 0) {
       LOG_ERROR("Duplicate table with difference file name. table=%s, the other filename=%s",
           table->name(), filename.c_str());
@@ -207,10 +212,11 @@ RC Db::open_all_tables()
       delete table;
       return RC::INTERNAL;
     }
-
+    // 更新next_table_id_
     if (table->table_id() >= next_table_id_) {
       next_table_id_ = table->table_id() + 1;
     }
+    // 加入到表名到table对象映射的哈希表中
     opened_tables_[table->name()] = table;
     LOG_INFO("Open table: %s, file: %s", table->name(), filename.c_str());
   }
@@ -250,15 +256,15 @@ RC Db::sync()
   在sync期间，不允许有未完成的事务，也不允许开启新的事物。
   这个约束不是从程序层面处理的，而是认为的约束。
   */
-  LSN current_lsn = log_handler_->current_lsn();
-  rc              = log_handler_->wait_lsn(current_lsn);
+  LSN current_lsn = log_handler_->current_lsn();    
+  rc              = log_handler_->wait_lsn(current_lsn);  // 等待所有日志刷盘
   if (OB_FAIL(rc)) {
     LOG_ERROR("Failed to wait lsn. lsn=%ld, rc=%d:%s", current_lsn, rc, strrc(rc));
     return rc;
   }
 
-  check_point_lsn_ = current_lsn;
-  rc               = flush_meta();
+  check_point_lsn_ = current_lsn;   // 记录日志检查点
+  rc               = flush_meta();  // 刷数据库元数据
   if (OB_FAIL(rc)) {
     LOG_ERROR("Failed to flush meta. db=%s, rc=%d:%s", name_.c_str(), rc, strrc(rc));
     return rc;
@@ -284,7 +290,7 @@ RC Db::recover()
     return rc;
   }
 
-  rc = log_handler_->start();
+  rc = log_handler_->start();   // 开启后台刷日志的线程
   if (OB_FAIL(rc)) {
     LOG_WARN("failed to start log handler. rc=%s", strrc(rc));
     return rc;
@@ -302,6 +308,7 @@ RC Db::recover()
 
 RC Db::init_meta()
 {
+  // 读取数据库元数据文件
   filesystem::path db_meta_file_path = db_meta_file(path_.c_str(), name_.c_str());
   if (!filesystem::exists(db_meta_file_path)) {
     check_point_lsn_ = 0;

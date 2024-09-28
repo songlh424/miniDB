@@ -46,6 +46,7 @@ class BufferPoolLogHandler;
 /**
  * @brief BufferPool 的实现
  * @defgroup BufferPool
+ * @details 一个BufferPool对应一个文件，文件中存放的是Page，Page中存放的是数据。
  */
 
 #define BP_FILE_SUB_HDR_SIZE (sizeof(BPFileSubHeader))
@@ -61,6 +62,8 @@ class BufferPoolLogHandler;
  *         效率非常低，你有办法优化吗？
  * @endcode
  */
+// 页面数量受限于bitmap大小，bitmap大小受限于页面大小
+// bitmap查找空闲页面效率低怎么解决？不使用bitmap？
 struct BPFileHeader
 {
   int32_t buffer_pool_id;   //! buffer pool id
@@ -69,7 +72,7 @@ struct BPFileHeader
   char    bitmap[0];        //! 页面分配位图, 第0个页面(就是当前页面)，总是1
 
   /**
-   * 能够分配的最大的页面个数，即bitmap的字节数 乘以8
+   * 能够分配的最大的页面个数，即bitmap的字节数 乘以8KB
    */
   static const int MAX_PAGE_NUM = (BP_PAGE_DATA_SIZE - sizeof(page_count) - sizeof(allocated_pages)) * 8;
 
@@ -194,6 +197,7 @@ public:
 
   /**
    * 根据文件名打开一个分页文件
+   * 读取文件头页到内存帧中
    */
   RC open_file(const char *file_name);
 
@@ -205,6 +209,7 @@ public:
   /**
    * 根据文件ID和页号获取指定页面到缓冲区，返回页面句柄指针。
    */
+  // 负责加载指定页面，先访问DoubelWrite，没命中才从文件中读取指定页
   RC get_this_page(PageNum page_num, Frame **frame);
 
   /**
@@ -263,8 +268,9 @@ public:
   /**
    * 刷新页面到磁盘
    */
+  // 这里真实写到文件中，由DoubleWrite调用
   RC write_page(PageNum page_num, Page &page);
-
+  // 回放分配和释放页面日志时调用
   RC redo_allocate_page(LSN lsn, PageNum page_num);
   RC redo_deallocate_page(LSN lsn, PageNum page_num);
 

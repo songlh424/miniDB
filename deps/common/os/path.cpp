@@ -171,7 +171,7 @@ int list_file(const char *path, const char *filter_pattern, vector<string> &file
 {
   regex_t reg;
   if (filter_pattern) {
-    const int res = regcomp(&reg, filter_pattern, REG_NOSUB);
+    const int res = regcomp(&reg, filter_pattern, REG_NOSUB); //编译正则表达式
     if (res) {
       char errbuf[256];
       regerror(res, &reg, errbuf, sizeof(errbuf));

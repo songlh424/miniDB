@@ -80,7 +80,7 @@ struct MvccTrxRecordLogEntry
 {
   MvccTrxLogHeader header;    ///< 日志头部
   int32_t          table_id;  ///< 表ID
-  RID              rid;       ///< 记录ID
+  RID              rid;       ///< 记录ID，页号和槽
 
   static const int32_t SIZE;  ///< 日志大小
 

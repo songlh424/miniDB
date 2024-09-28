@@ -18,6 +18,8 @@ See the Mulan PSL v2 for more details. */
  * @brief A column contains multiple values in contiguous memory with a specified type.
  */
 // TODO: `Column` currently only support fixed-length type.
+// Column存储一列值，目前仅支持定长类型
+// 想要存储不定长类型，应该需要维护长度信息，便于访问和添加
 class Column
 {
 public:
@@ -70,6 +72,7 @@ public:
 
   /**
    * @brief 引用另一个 Column
+   * @details 不掌控该内存的生命周期
    */
   void reference(const Column &column);
 

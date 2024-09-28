@@ -43,11 +43,12 @@ public:
   virtual RC clear_pages(DiskBufferPool *bp) = 0;
 };
 
+// doubleWrite文件头记录该文件的页数
 struct DoubleWriteBufferHeader
 {
   int32_t page_cnt = 0;
 
-  static const int32_t SIZE;
+  static const int32_t SIZE;  // 每页的大小
 };
 
 // TODO change to FrameId
@@ -141,7 +142,7 @@ private:
   RC load_pages();
 
 private:
-  int                     file_desc_ = -1;
+  int                     file_desc_ = -1;  // 文件描述符
   int                     max_pages_ = 0;
   common::Mutex           lock_;
   BufferPoolManager      &bp_manager_;

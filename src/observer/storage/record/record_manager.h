@@ -136,6 +136,7 @@ public:
    * @param page_num    当前处理哪个页面
    * @param mode        是否只读。在访问页面时，需要对页面加锁
    */
+  // !!!!! 这里会对页面加相应的锁
   RC init(DiskBufferPool &buffer_pool, LogHandler &log_handler, PageNum page_num, ReadWriteMode mode);
 
   /**

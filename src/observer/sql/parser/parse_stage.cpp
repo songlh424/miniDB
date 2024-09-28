@@ -36,6 +36,8 @@ RC ParseStage::handle_request(SQLStageEvent *sql_event)
 
   ParsedSqlResult parsed_sql_result;
 
+  // 得到ParsedSqlResult对象，该对象可存多个ParsedSqlNode对象
+  // 实际上同时执行多条语句，只处理一个ParsedSqlNode对象
   parse(sql.c_str(), &parsed_sql_result); // parse sql  
   if (parsed_sql_result.sql_nodes().empty()) {
     sql_result->set_return_code(RC::SUCCESS);
@@ -56,7 +58,7 @@ RC ParseStage::handle_request(SQLStageEvent *sql_event)
     return rc;
   }
 
-  sql_event->set_sql_node(std::move(sql_node));
+  sql_event->set_sql_node(std::move(sql_node));   // sql_node对象被sql_event对象拥有
 
   return RC::SUCCESS;
 }

@@ -40,6 +40,7 @@ public:
 
     Db *db = session_event->session()->get_current_db();
 
+    // 调用引擎接口获取所有的表名
     std::vector<std::string> all_tables;
     db->all_tables(all_tables);
 

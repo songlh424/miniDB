@@ -35,7 +35,7 @@ public:
   }
 
 private:
-  std::string table_name_;
-  std::string field_name_;
-  std::string alias_;
+  std::string table_name_;  // 表名
+  std::string field_name_;  // 字段名
+  std::string alias_;       // 别名
 };

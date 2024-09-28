@@ -82,7 +82,7 @@ void NetServer::accept(int fd)
   socklen_t          addrlen = sizeof(addr);
 
   int ret = 0;
-
+  
   int client_fd = ::accept(fd, (struct sockaddr *)&addr, &addrlen);
   if (client_fd < 0) {
     LOG_ERROR("Failed to accept client's connection, %s", strerror(errno));
@@ -118,7 +118,7 @@ void NetServer::accept(int fd)
   }
 
   Communicator *communicator = communicator_factory_.create(server_param_.protocol);
-
+  // 每个会话都基于默认会话
   RC rc = communicator->init(client_fd, make_unique<Session>(Session::default_session()), addr_str);
   if (rc != RC::SUCCESS) {
     LOG_WARN("failed to init communicator. rc=%s", strrc(rc));
@@ -243,6 +243,7 @@ int NetServer::start_unix_socket_server()
 
 int NetServer::serve()
 {
+  // 创建并启动线程池
   thread_handler_ = ThreadHandler::create(server_param_.thread_handling.c_str());
   if (thread_handler_ == nullptr) {
     LOG_ERROR("Failed to create thread handler: %s", server_param_.thread_handling.c_str());
@@ -255,6 +256,7 @@ int NetServer::serve()
     return -1;
   }
 
+  // 网络初始化，包括本地套接字创建、绑定等工作
   int retval = start();
   if (retval == -1) {
     LOG_PANIC("Failed to start network");
@@ -267,6 +269,7 @@ int NetServer::serve()
     poll_fd.events  = POLLIN;
     poll_fd.revents = 0;
 
+    // 监听套接字事件循环，也就是main主线程的循环
     while (started_) {
       int ret = poll(&poll_fd, 1, 500);
       if (ret < 0) {
@@ -281,7 +284,7 @@ int NetServer::serve()
         LOG_ERROR("poll error. fd = %d, revents = %d", poll_fd.fd, poll_fd.revents);
         break;
       }
-
+      // 会把新接入的连接放到线程池中处理
       this->accept(server_socket_);
     }
   }

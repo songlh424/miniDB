@@ -22,6 +22,7 @@ See the Mulan PSL v2 for more details. */
 
 ThreadHandler * ThreadHandler::create(const char *name)
 {
+  // 每个连接都用一个线程
   const char *default_name = "one-thread-per-connection";
   if (nullptr == name || common::is_blank(name)) {
     name = default_name;

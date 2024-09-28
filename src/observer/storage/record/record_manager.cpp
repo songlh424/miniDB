@@ -93,7 +93,7 @@ RC RecordPageIterator::next(Record &record)
 
 ////////////////////////////////////////////////////////////////////////////////
 
-RecordPageHandler::~RecordPageHandler() { cleanup(); }
+RecordPageHandler::~RecordPageHandler() { cleanup(); }  // 释放资源
 
 RC RecordPageHandler::init(DiskBufferPool &buffer_pool, LogHandler &log_handler, PageNum page_num, ReadWriteMode mode)
 {
@@ -102,10 +102,11 @@ RC RecordPageHandler::init(DiskBufferPool &buffer_pool, LogHandler &log_handler,
       LOG_WARN("Disk buffer pool has been opened for page_num %d.", page_num);
       return RC::RECORD_OPENNED;
     } else {
-      cleanup();
+      cleanup();  // 清除frame，包括释放锁资源，减少响应frame的引用计数
     }
   }
 
+  // 加载页面到到内存的frame
   RC ret = RC::SUCCESS;
   if ((ret = buffer_pool.get_this_page(page_num, &frame_)) != RC::SUCCESS) {
     LOG_ERROR("Failed to get page handle from disk buffer pool. ret=%d:%s", ret, strrc(ret));
@@ -113,7 +114,7 @@ RC RecordPageHandler::init(DiskBufferPool &buffer_pool, LogHandler &log_handler,
   }
 
   char *data = frame_->data();
-
+  // 页面锁，分为页面共享读锁和互斥写锁
   if (mode == ReadWriteMode::READ_ONLY) {
     frame_->read_latch();
   } else {
@@ -123,7 +124,7 @@ RC RecordPageHandler::init(DiskBufferPool &buffer_pool, LogHandler &log_handler,
 
   rw_mode_     = mode;
   page_header_ = (PageHeader *)(data);
-  bitmap_      = data + PAGE_HEADER_SIZE;
+  bitmap_      = data + PAGE_HEADER_SIZE;   //页面中槽的bitmap
 
   (void)log_handler_.init(log_handler, buffer_pool.id(), page_header_->record_real_size, storage_format_);
 
@@ -169,6 +170,7 @@ RC RecordPageHandler::init_empty_page(
 
   (void)log_handler_.init(log_handler, buffer_pool.id(), record_size, storage_format_);
 
+  // 设置页面头信息
   int column_num = 0;
   // only pax format need column index
   if (table_meta != nullptr && storage_format_ == StorageFormat::PAX_FORMAT) {
@@ -200,7 +202,7 @@ RC RecordPageHandler::init_empty_page(
       column_index[i] = table_meta->field(i)->len() * page_header_->record_capacity + column_index[i - 1];
     }
   }
-
+  // 初始化新页写日志
   rc = log_handler_.init_new_page(frame_, page_num, span((const char *)column_index, column_num * sizeof(int)));
   if (OB_FAIL(rc)) {
     LOG_ERROR("Failed to init empty page: write log failed. page_num:record_size %d:%d. rc=%s", 
@@ -333,11 +335,11 @@ RC RowRecordPageHandler::delete_record(const RID *rid)
 
   Bitmap bitmap(bitmap_, page_header_->record_capacity);
   if (bitmap.get_bit(rid->slot_num)) {
-    bitmap.clear_bit(rid->slot_num);
+    bitmap.clear_bit(rid->slot_num);  // 只需要设置位图即可，不需要删除数据
     page_header_->record_num--;
     frame_->mark_dirty();
 
-    RC rc = log_handler_.delete_record(frame_, *rid);
+    RC rc = log_handler_.delete_record(frame_, *rid); // 先写日志
     if (OB_FAIL(rc)) {
       LOG_ERROR("Failed to delete record. page_num %d:%d. rc=%s", disk_buffer_pool_->file_desc(), frame_->page_num(), strrc(rc));
       // return rc; // ignore errors
@@ -371,7 +373,7 @@ RC RowRecordPageHandler::update_record(const RID &rid, const char *data)
       memcpy(record_data, data, page_header_->record_real_size);
     }
 
-    RC rc = log_handler_.update_record(frame_, rid, data);
+    RC rc = log_handler_.update_record(frame_, rid, data);  // 写更新日志
     if (OB_FAIL(rc)) {
       LOG_ERROR("Failed to update record. page_num %d:%d. rc=%s", 
                 disk_buffer_pool_->file_desc(), frame_->page_num(), strrc(rc));
@@ -491,7 +493,8 @@ RC RecordFileHandler::init(DiskBufferPool &buffer_pool, LogHandler &log_handler,
   disk_buffer_pool_ = &buffer_pool;
   log_handler_      = &log_handler;
   table_meta_       = table_meta;
-
+  // 获取表文件中未填满的页面的页号，会将所有页面加载进内存frame中
+  // 但会释放锁和引用计数的资源，该frame可以被释放
   RC rc = init_free_pages();
 
   LOG_INFO("open record file handle done. rc=%s", strrc(rc));

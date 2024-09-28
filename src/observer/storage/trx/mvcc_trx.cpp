@@ -283,7 +283,7 @@ RC MvccTrx::commit_with_trx_id(int32_t commit_xid)
   // TODO 原子性提交BUG：这里存在一个很大的问题，不能让其他事务一次性看到当前事务更新到的数据或同时看不到
   RC rc    = RC::SUCCESS;
   started_ = false;
-
+  // 修改已经写到frame中，这里主要修改记录的事务字段，并写commit日志
   for (const Operation &operation : operations_) {
     switch (operation.type()) {
       case Operation::Type::INSERT: {       // 插入操作
@@ -302,7 +302,7 @@ RC MvccTrx::commit_with_trx_id(int32_t commit_xid)
           begin_xid_field.set_int(record, commit_xid);
           return true;
         };
-
+        // 主要是这里对页面修改时加锁，修改完就解锁，会导致其他事务看到部分数据
         rc = operation.table()->visit_record(rid, record_updater);
         ASSERT(rc == RC::SUCCESS, "failed to get record while committing. rid=%s, rc=%s",
                rid.to_string().c_str(), strrc(rc));
@@ -448,7 +448,7 @@ RC MvccTrx::redo(Db *db, const LogEntry &log_entry)
 {
   auto *trx_log_header = reinterpret_cast<const MvccTrxLogHeader *>(log_entry.data());
   Table *table = nullptr;
-  RC     rc    = find_table(db, log_entry, table);
+  RC     rc    = find_table(db, log_entry, table);  // 找到日志所对应的表
   if (OB_FAIL(rc)) {
     return rc;
   }

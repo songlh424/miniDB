@@ -35,7 +35,7 @@ RC LogHandler::create(const char *name, LogHandler *&log_handler)
   if (name == nullptr || common::is_blank(name)) {
     name = "vacuous";
   }
-
+  // 忽略大小写比较
   if (strcasecmp(name, "disk") == 0) {
     log_handler = new DiskLogHandler();
   } else if (strcasecmp(name, "vacuous") == 0) {

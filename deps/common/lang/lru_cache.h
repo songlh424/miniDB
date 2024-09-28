@@ -35,7 +35,7 @@ class LruCache
   public:
     ListNode(const Key &key, const Value &value) : key_(key), value_(value) {}
   };
-
+  // 哈希函数
   class PListNodeHasher
   {
   public:
@@ -50,7 +50,7 @@ class LruCache
   private:
     Hash hasher_;
   };
-
+  // 判断是否相等的谓词函数
   class PListNodePredicator
   {
   public:

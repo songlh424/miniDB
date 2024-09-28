@@ -39,6 +39,7 @@ struct LogHeader final
 /**
  * @brief 描述一条日志
  * @ingroup CLog
+ * @details |lsn|size|module_id|-----------data-----------|
  */
 class LogEntry
 {
@@ -58,7 +59,7 @@ public:
 
 public:
   /**
-   * @brief 一条日志的最大大小
+   * @brief 一条日志的最大大小，4MB
    */
   static int32_t max_size() { return 4 * 1024 * 1024; }
   /**

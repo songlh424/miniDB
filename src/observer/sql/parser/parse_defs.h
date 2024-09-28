@@ -298,9 +298,9 @@ public:
   CreateIndexSqlNode  create_index;
   DropIndexSqlNode    drop_index;
   DescTableSqlNode    desc_table;
-  LoadDataSqlNode     load_data;
-  ExplainSqlNode      explain;
-  SetVariableSqlNode  set_variable;
+  LoadDataSqlNode     load_data;    // 加载文件数据到表中，记录表名和文件名
+  ExplainSqlNode      explain;      // 记录explain后面解析到的paserdSqlNode
+  SetVariableSqlNode  set_variable; // 记录变量名和值
 
 public:
   ParsedSqlNode();

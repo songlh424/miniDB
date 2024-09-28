@@ -19,6 +19,7 @@ See the Mulan PSL v2 for more details. */
 /**
  * @brief 日志模块
  * @ingroup CLog
+ * @details 表示日志的来源
  */
 class LogModule
 {

@@ -48,6 +48,7 @@ struct LatchMemoItem
   common::SharedMutex *lock  = nullptr;
 };
 
+// 会记住所有操作过的page，在该对象析构时同一释放所有page的锁和frame内存
 class LatchMemo final
 {
 public:
@@ -73,7 +74,7 @@ public:
 
   void xlatch(common::SharedMutex *lock);
   void slatch(common::SharedMutex *lock);
-
+  // 
   void release();
 
   void release_to(int point);
@@ -85,6 +86,6 @@ private:
 
 private:
   DiskBufferPool      *buffer_pool_ = nullptr;
-  deque<LatchMemoItem> items_;           /// 
+  deque<LatchMemoItem> items_;           ///
   vector<PageNum>      disposed_pages_;  /// 等待释放的页面
 };

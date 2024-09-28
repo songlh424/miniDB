@@ -16,6 +16,7 @@ See the Mulan PSL v2 for more details. */
 
 #include "common/rc.h"
 
+// 没有实际作用，是处理sql请求的第一步
 class SQLStageEvent;
 
 /**

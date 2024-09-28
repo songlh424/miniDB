@@ -92,7 +92,7 @@ protected:
  */
 enum class CommunicateProtocol
 {
-  PLAIN,  ///< 以'\0'结尾的协议
+  PLAIN,  ///< 以'\0'结尾的文本协议
   CLI,    ///< 与客户端进行交互的协议。CLI 不应该是一种协议，只是一种通讯的方式而已
   MYSQL,  ///< mysql通讯协议。具体实现参考 MysqlCommunicator
 };

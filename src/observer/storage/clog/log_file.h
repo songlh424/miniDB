@@ -38,6 +38,7 @@ public:
   RC open(const char *filename);
   RC close();
 
+  // 读取自start_lsn开始的日志，传给callback处理
   RC iterate(function<RC(LogEntry &)> callback, LSN start_lsn = 0);
 
 private:
@@ -93,7 +94,7 @@ public:
 private:
   string filename_;       /// 日志文件名
   int    fd_       = -1;  /// 日志文件描述符
-  int    last_lsn_ = 0;   /// 写入的最后一条日志LSN
+  int    last_lsn_ = 0;   /// 写入的最后一条日志LSN，每次写日志时更新
   int    end_lsn_  = 0;   /// 当前日志文件中允许写入的最大的LSN，包括这条日志
 };
 
@@ -114,6 +115,7 @@ public:
    *
    * @param directory 日志文件目录
    * @param max_entry_number_per_file 一个文件最多存储多少条日志
+   * @details 如果目录不存在，就创建目录。目录下有日志文件，全部放到map中
    */
   RC init(const char *directory, int max_entry_number_per_file);
 

@@ -106,6 +106,7 @@ void LatchMemo::slatch(common::SharedMutex *lock)
   items_.emplace_back(LatchMemoType::SHARED, lock);
 }
 
+// 释放锁资源
 void LatchMemo::release_item(LatchMemoItem &item)
 {
   switch (item.type) {
@@ -137,7 +138,7 @@ void LatchMemo::release_item(LatchMemoItem &item)
 void LatchMemo::release()
 {
   int point = static_cast<int>(items_.size());
-  release_to(point);
+  release_to(point);  // 先释放锁资源
 
   for (PageNum page_num : disposed_pages_) {
     buffer_pool_->dispose_page(page_num);
@@ -145,6 +146,7 @@ void LatchMemo::release()
   disposed_pages_.clear();
 }
 
+// 倒序释放锁资源
 void LatchMemo::release_to(int point)
 {
   ASSERT(point >= 0 && point <= static_cast<int>(items_.size()), 

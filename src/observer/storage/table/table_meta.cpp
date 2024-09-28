@@ -114,6 +114,7 @@ span<const FieldMeta> TableMeta::trx_fields() const
 }
 
 const FieldMeta *TableMeta::field(int index) const { return &fields_[index]; }
+// 判断name字段是否存在
 const FieldMeta *TableMeta::field(const char *name) const
 {
   if (nullptr == name) {
